@@ -22,6 +22,7 @@ PHOTO_EXTENSIONS = frozenset(
     {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif", ".avif", ".tif", ".tiff", ".bmp"}
 ) | RAW_EXTENSIONS
 VIDEO_EXTENSIONS = frozenset({".mp4", ".mov", ".m4v", ".avi", ".mkv", ".3gp", ".mts", ".m2ts"})
+ARCHIVE_EXTENSIONS = frozenset({".zip", ".tar", ".tgz", ".7z", ".rar", ".zst"})
 SIDECAR_EXTENSIONS = frozenset({".json", ".xmp"})
 SKIP_DIRECTORIES = frozenset({".git", ".spotlight-v100", "$recycle.bin", "@eadir", "@__thumb"})
 
@@ -41,6 +42,8 @@ def inventory_root(root: Path, max_files: int = 0) -> dict[str, object]:
         "photos": 0,
         "raw_photos": 0,
         "videos": 0,
+        "archive_containers": 0,
+        "archive_bytes": 0,
         "sidecars": 0,
         "media_bytes": 0,
         "raw_jpeg_pairs": 0,
@@ -77,6 +80,10 @@ def inventory_root(root: Path, max_files: int = 0) -> dict[str, object]:
                         suffix = Path(entry.name).suffix.lower()
                         if suffix in SIDECAR_EXTENSIONS:
                             stats["sidecars"] += 1
+                            continue
+                        if suffix in ARCHIVE_EXTENSIONS:
+                            stats["archive_containers"] += 1
+                            stats["archive_bytes"] += entry.stat(follow_symlinks=False).st_size
                             continue
                         if suffix not in PHOTO_EXTENSIONS and suffix not in VIDEO_EXTENSIONS:
                             continue
@@ -122,9 +129,15 @@ def scan_roots(roots: Sequence[Path], max_files: int = 0) -> dict[str, object]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Read-only photo archive preflight (aggregate counts only)")
-    parser.add_argument("roots", nargs="+", type=Path, help="mounted photo directories; never altered")
-    parser.add_argument("--max-files", type=int, default=0, help="limit media files per root for a pilot (0=all)")
+    parser = argparse.ArgumentParser(
+        description="Read-only photo archive preflight (aggregate counts only)"
+    )
+    parser.add_argument(
+        "roots", nargs="+", type=Path, help="mounted photo directories; never altered"
+    )
+    parser.add_argument(
+        "--max-files", type=int, default=0, help="limit media files per root for a pilot (0=all)"
+    )
     args = parser.parse_args(argv)
     try:
         result = scan_roots(args.roots, max_files=args.max_files)
