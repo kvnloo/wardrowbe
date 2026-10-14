@@ -187,6 +187,30 @@ async function uploadChunkWithinServerLimit(chunk: QueuedUpload[]): Promise<Bulk
       }
       return mergeBulkUploadResponses(responses);
     }
+    if (error instanceof PayloadTooLargeError) {
+      // A proxy can reject the batch even when each photo fits individually.
+      // Split it instead of retrying the same rejected payload five times.
+      if (chunk.length === 1) {
+        return {
+          total: 1,
+          successful: 0,
+          failed: 1,
+          results: [
+            {
+              filename: chunk[0].filename,
+              success: false,
+              error: error.message,
+              error_code: 'too_large',
+            },
+          ],
+        };
+      }
+      const middle = Math.ceil(chunk.length / 2);
+      return mergeBulkUploadResponses([
+        await uploadChunkWithinServerLimit(chunk.slice(0, middle)),
+        await uploadChunkWithinServerLimit(chunk.slice(middle)),
+      ]);
+    }
     throw error;
   }
 }

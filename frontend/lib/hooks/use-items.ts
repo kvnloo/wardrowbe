@@ -1133,6 +1133,30 @@ export async function uploadFilesWithinServerLimit(
       }
       return mergeBulkUploadResponses(responses);
     }
+    if (error instanceof ApiError && error.status === 413) {
+      if (files.length === 1) {
+        return {
+          total: 1,
+          successful: 0,
+          failed: 1,
+          results: [
+            {
+              filename: files[0].name,
+              success: false,
+              error: error.message,
+              error_code: 'too_large',
+            },
+          ],
+        };
+      }
+      // The non-durable XHR fallback also needs to recover good photos from
+      // a proxy-rejected batch, not mark the entire batch as failed.
+      const middle = Math.ceil(files.length / 2);
+      return mergeBulkUploadResponses([
+        await uploadFilesWithinServerLimit(files.slice(0, middle), skipAi, token, onProgress),
+        await uploadFilesWithinServerLimit(files.slice(middle), skipAi, token, onProgress),
+      ]);
+    }
     throw error;
   }
 }
