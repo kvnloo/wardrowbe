@@ -23,6 +23,7 @@ def test_photo_types_and_raw_jpeg_pairs(tmp_path: Path) -> None:
     touch(tmp_path / "Takeout" / "photo.HEIC.supplemental-metadata.json", 2)
     touch(tmp_path / "Takeout" / "IMG_002.JPG.xmp", 2)
     touch(tmp_path / "Trip" / "video.MOV", 11)
+    touch(tmp_path / "Takeout" / "takeout-part-1.zip", 60)
     touch(tmp_path / "Trip" / "other.txt", 20)
 
     stats = inventory_root(tmp_path)
@@ -30,6 +31,8 @@ def test_photo_types_and_raw_jpeg_pairs(tmp_path: Path) -> None:
     assert stats["raw_photos"] == 2
     assert stats["videos"] == 1
     assert stats["sidecars"] == 2
+    assert stats["archive_containers"] == 1
+    assert stats["archive_bytes"] == 60
     assert stats["raw_jpeg_pairs"] == 1
     assert stats["media_bytes"] == 49
     assert stats["by_extension"][".cr3"] == 1
@@ -39,6 +42,7 @@ def test_photo_types_and_raw_jpeg_pairs(tmp_path: Path) -> None:
 
 def test_stat_only_does_not_read_images(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     touch(tmp_path / "outfit.jpg", 13)
+
     def reject_read(*args: object, **kwargs: object) -> None:
         raise AssertionError("image bytes must never be read")
 
