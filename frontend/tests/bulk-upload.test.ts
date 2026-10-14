@@ -143,6 +143,81 @@ describe('uploadFilesWithinServerLimit', () => {
     expect(result.results.map((r) => r.filename)).toEqual(['a.jpg', 'b.jpg', 'c.jpg'])
   })
 
+  it('splits a 413 batch and keeps the original result order', async () => {
+    const files = ['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg'].map((name) => new File(['x'], name))
+    FakeXhr.queue.push(
+      { status: 413, body: {} },
+      {
+        status: 201,
+        body: {
+          total: 2,
+          successful: 2,
+          failed: 0,
+          results: [
+            { filename: 'a.jpg', success: true },
+            { filename: 'b.jpg', success: true },
+          ],
+        },
+      },
+      {
+        status: 201,
+        body: {
+          total: 2,
+          successful: 2,
+          failed: 0,
+          results: [
+            { filename: 'c.jpg', success: true },
+            { filename: 'd.jpg', success: true },
+          ],
+        },
+      }
+    )
+
+    const result = await uploadFilesWithinServerLimit(files, false, 'token', vi.fn())
+
+    expect(FakeXhr.sentImageCounts).toEqual([4, 2, 2])
+    expect(result.successful).toBe(4)
+    expect(result.results.map((row) => row.filename)).toEqual(files.map((file) => file.name))
+  })
+
+  it('reports only the single oversized file as failed after 413 splitting', async () => {
+    const files = ['a.jpg', 'oversize.jpg', 'c.jpg'].map((name) => new File(['x'], name))
+    FakeXhr.queue.push(
+      { status: 413, body: {} },
+      { status: 413, body: {} },
+      {
+        status: 201,
+        body: {
+          total: 1,
+          successful: 1,
+          failed: 0,
+          results: [{ filename: 'a.jpg', success: true }],
+        },
+      },
+      { status: 413, body: {} },
+      {
+        status: 201,
+        body: {
+          total: 1,
+          successful: 1,
+          failed: 0,
+          results: [{ filename: 'c.jpg', success: true }],
+        },
+      }
+    )
+
+    const result = await uploadFilesWithinServerLimit(files, false, 'token', vi.fn())
+
+    expect(FakeXhr.sentImageCounts).toEqual([3, 2, 1, 1, 1])
+    expect(result.total).toBe(3)
+    expect(result.successful).toBe(2)
+    expect(result.failed).toBe(1)
+    expect(result.results.map((row) => row.success)).toEqual([true, false, true])
+    expect(result.results[1]).toEqual(
+      expect.objectContaining({ filename: 'oversize.jpg', error_code: 'too_large' })
+    )
+  })
+
   it('propagates a non-limit error without splitting', async () => {
     const files = [new File(['a'], 'a.jpg')]
     FakeXhr.queue.push({ status: 500, body: { detail: 'Internal error' } })
