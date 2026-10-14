@@ -262,6 +262,69 @@ describe('startDrain', () => {
     expect(chunkSizes).toEqual([2, 1])
   })
 
+  it('bisects proxy-rejected multi-photo batches without exhausting retry attempts', async () => {
+    await enqueueFiles(
+      [makeFile('a.jpg'), makeFile('b.jpg'), makeFile('c.jpg'), makeFile('d.jpg')],
+      false
+    )
+    vi.mocked(fetch).mockReset()
+    const requestSizes: number[] = []
+    const uploaded: string[] = []
+    vi.mocked(fetch).mockImplementation(async (_url, init) => {
+      const names = (init?.body as FormData).getAll('images').map((f) => (f as File).name)
+      requestSizes.push(names.length)
+      if (names.length > 2) return jsonResponse({}, false, 413)
+      uploaded.push(...names)
+      return jsonResponse({
+        total: names.length,
+        successful: names.length,
+        failed: 0,
+        results: names.map((filename) => ({ filename, success: true })),
+      })
+    })
+
+    await manager.startDrain()
+
+    expect(requestSizes).toEqual([4, 2, 2])
+    expect(uploaded.sort()).toEqual(['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg'])
+    expect(await getPendingUploads()).toHaveLength(0)
+  })
+
+  it('isolates a singleton 413 while preserving the other uploaded photos', async () => {
+    await enqueueFiles(
+      [makeFile('a.jpg'), makeFile('oversize.jpg'), makeFile('c.jpg')],
+      false
+    )
+    vi.mocked(fetch).mockReset()
+    const requests: string[][] = []
+    const uploaded: string[] = []
+    vi.mocked(fetch).mockImplementation(async (_url, init) => {
+      const names = (init?.body as FormData).getAll('images').map((f) => (f as File).name)
+      requests.push(names)
+      if (names.includes('oversize.jpg')) return jsonResponse({}, false, 413)
+      uploaded.push(...names)
+      return jsonResponse({
+        total: names.length,
+        successful: names.length,
+        failed: 0,
+        results: names.map((filename) => ({ filename, success: true })),
+      })
+    })
+
+    await manager.startDrain()
+
+    const state = await manager.getState()
+    expect(requests[0]).toHaveLength(3)
+    expect(requests.filter((names) => names.length === 1 && names[0] === 'oversize.jpg'))
+      .toHaveLength(1)
+    expect(uploaded.sort()).toEqual(['a.jpg', 'c.jpg'])
+    expect(state.remaining).toBe(0)
+    expect(state.terminalRecords).toEqual([
+      expect.objectContaining({ filename: 'oversize.jpg', errorCode: 'too_large', retryable: false }),
+    ])
+    expect((await getPendingUploads()).map((record) => record.filename)).toEqual(['oversize.jpg'])
+  })
+
   it('chunks by the limit the features endpoint reports, without a rejected request first', async () => {
     manager.init(clientWithFeatures({ background_removal: false, max_bulk_upload_count: 2 }))
     await enqueueFiles(
