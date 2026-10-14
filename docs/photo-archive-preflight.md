@@ -11,11 +11,11 @@ python backend/scripts/photo_archive_inventory.py --max-files 500 "/path/to/goog
 python backend/scripts/photo_archive_inventory.py "/path/to/google-photos" "/path/to/dslr-archive" > ~/photo-archive-summary.json
 ```
 
-Only directory listing and file-stat operations are performed. Output is an aggregate JSON summary of counts, file bytes, RAW+JPEG filename-pair candidates, formats, JSON/XMP sidecars, errors and pilot truncation. Symlinks and known OS metadata directories are skipped. This does not require enough free space to copy a multi-terabyte archive.
+Only directory listing and file-stat operations are performed. Output is an aggregate JSON summary of counts, file bytes, RAW+JPEG filename-pair candidates, formats, JSON/XMP sidecars, unopened ZIP/7z/tar containers, errors and pilot truncation. Symlinks and known OS metadata directories are skipped. This does not require enough free space to copy a multi-terabyte archive.
 
 **Privacy:** The report uses `source_1` and `source_2`, not original file paths or names. It includes no images, EXIF/GPS, faces, or Takeout sidecar contents. Do not publish private image samples or other personal archive metadata in a public issue or PR.
 
-**Limitations:** RAW+JPEG pairs are filename-based *candidates*, not verified duplicates. Google Takeout `.json` sidecars are counted, not parsed or matched. The tool does not perform detection, recognition, or wardrobe imports. A read-only scan can still generate disk I/O; try a limited pilot first. Never use this tool to infer a successful scan if errors > 0 or truncated is true.
+**Limitations:** RAW+JPEG pairs are filename-based *candidates*, not verified duplicates. Google Takeout `.json` sidecars are counted, not parsed or matched. ZIP archives are counted but not inspected; extracted directories are needed to inventory their media. The tool does not perform detection, recognition, or wardrobe imports. A read-only scan can still generate disk I/O; try a limited pilot first. Never use this tool to infer a successful scan if errors > 0 or truncated is true.
 
 ## Next research stage
 
